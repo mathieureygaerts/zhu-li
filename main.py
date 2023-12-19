@@ -18,13 +18,15 @@ ASSISTANT_NAME = 'Zhu Li'
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(ASSISTANT_NAME)
 
-Action = namedtuple('Action', 'topic probability playload')
+Action = namedtuple('Action', 'topic score playload')
+Patern = namedtuple('Patern', 'input action score')
 
 commands = {
     'energize': Action('energize', 0.72, None),
     'desk': Action('desk', 0.75, None),
     'do the thing': Action('light', 0.72, None),
     'romantica': Action('romantica', 0.72, None),
+    'bedroom': Action('bedroom', 0.72, None),
 }
 
 def get_mic():
@@ -67,16 +69,36 @@ def find_pattern(text):
         msg += f'{value[0]}: {value[1]} '    
     logger.info(msg)    
 
-    if analyze_sorted[first_element][1] >= commands[first_element].probability:
-        return first_element
+    if analyze_sorted[first_element][1] >= commands[first_element].score:
+        return Patern(text, first_element, analyze_sorted[first_element][1])
+    
     return None
 
 
+def set_playload(patern):
+    playload = commands[patern.action].playload
+    playload_extra = {
+        'action': f'{ASSISTANT_NAME} {patern.action}',
+        'input': patern.input,
+        'score': patern.score
+    }
+
+    if playload is None:
+        playload = playload_extra
+    else:
+        playload.update(playload_extra)
+
+    return playload
+
+
 def trigger_action(mqtt_client, patern):
-    action = commands[patern]
-    logger.info('%s %s Triggered' % (ASSISTANT_NAME, patern))
+    action = commands[patern.action]
+    logger.info('%s %s Triggered' % (ASSISTANT_NAME, patern.action))
     mqtt_topic = ASSISTANT_NAME.lower().replace(' ', '') + '/' + action.topic
-    mqtt_client.publish(mqtt_topic, payload=action.playload, qos=1)
+
+    playload = set_playload(patern)
+
+    mqtt_client.publish(mqtt_topic, payload=json.dumps(playload), qos=1)
 
 
 def main():
@@ -104,9 +126,9 @@ def main():
             sys.exit(0)
         except Exception as err:
             logger.exception(err)
-            logger.warn('Restarting in:')
-            for i in range(3):
-                logger.warn(i)
+            logger.warning('Restarting in:')
+            for i in range(3, 0, -1):
+                logger.warning(i)
                 sleep(1)
             main()   
 
