@@ -27,6 +27,12 @@ commands = {
     'do the thing': Action('light', 0.72, None),
     'romantica': Action('romantica', 0.72, None),
     'bedroom': Action('bedroom', 0.72, None),
+    'livingroom': Action('livingroom', 0.72, None),
+    'kitchen': Action('kitchen', 0.72, None),
+    'entrance': Action('entrance', 0.72, None),
+    'diningroom': Action('diningroom', 0.72, None),
+    'laundry': Action('laundry', 0.72, None),
+    'thank you': Action('thanks', 0.72, None),
 }
 
 def get_mic():
@@ -72,7 +78,7 @@ def find_pattern(text):
     if analyze_sorted[first_element][1] >= commands[first_element].score:
         return Patern(text, first_element, analyze_sorted[first_element][1])
     
-    return None
+    return Patern(text, None, analyze_sorted)
 
 
 def set_playload(patern):
@@ -101,6 +107,15 @@ def trigger_action(mqtt_client, patern):
     mqtt_client.publish(mqtt_topic, payload=json.dumps(playload), qos=1)
 
 
+def trigger_fail(mqtt_client, patern):
+    playload = {'input': patern.input}
+    playload.update({'scores': patern.score})
+
+    mqtt_failed_topic = ASSISTANT_NAME.lower().replace(' ', '') + '/' + 'fail'
+
+    mqtt_client.publish(mqtt_failed_topic, payload=json.dumps(playload), qos=1)
+
+
 def main():
     mic_stream = get_mic()
     mic_stream.start_stream()
@@ -109,15 +124,16 @@ def main():
     mqtt_client = mqtt.Client(client_id='', clean_session=True, userdata=None, protocol=mqtt.MQTTv311, transport='tcp')
     mqtt_client.connect(MQTT_SERVER, port=MQTT_PORT, keepalive=60)
     mqtt_client.loop_start()
-    
+
     while True:
         try:
             text = process_audio(recognizer, mic_stream)
             if text:
                 patern = find_pattern(text)
-
-                if patern:
+                if patern.action:
                     trigger_action(mqtt_client, patern)
+                else:
+                    trigger_fail(mqtt_client, patern)
 
         except KeyboardInterrupt:
             logger.warning('Terminating!')
