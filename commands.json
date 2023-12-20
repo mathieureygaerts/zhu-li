@@ -1,0 +1,52 @@
+{
+    "do the thing": {
+        "topic": "light",
+        "score": 0.72,
+        "payload": null
+    },
+    "energize": {
+        "topic": "energize",
+        "score": 0.72,
+        "payload": null
+    },
+    "romantica": {
+        "topic": "romantica",
+        "score": 0.72,
+        "payload": null
+    },
+    "desk": {
+        "topic": "desk",
+        "score": 0.75,
+        "payload": null
+    },
+    "bedroom": {
+        "topic": "bedroom",
+        "score": 0.72,
+        "payload": null
+    },
+    "livingroom": {
+        "topic": "livingroom",
+        "score": 0.72,
+        "payload": null
+    },
+    "kitchen": {
+        "topic": "kitchen",
+        "score": 0.72,
+        "payload": null
+    },
+    "entrance": {
+        "topic": "entrance",
+        "score": 0.72,
+        "payload": null
+    },
+    "diningroom": {
+        "topic": "diningroom",
+        "score": 0.72,
+        "payload": null
+    },
+    "thank you": {
+        "topic": "thanks",
+        "score": 0.72,
+        "payload": null
+    }
+}
