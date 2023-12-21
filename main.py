@@ -5,23 +5,19 @@ It publishes MQTT messages when commands are triggered.
 import sys
 import os
 from time import sleep
-import logging
+from lib.logger import logger
 import json
-from collections import namedtuple
-from vosk import Model, KaldiRecognizer
+from collections import namedtuple, deque
+import audioop
 from pyaudio import PyAudio, paInt16
 from jellyfish import jaro_winkler_similarity
 import paho.mqtt.client as mqtt
-
-MODEL = os.environ['VOSK_MODEL_PATH']
+from speech.vosk import Vosk
 
 MQTT_SERVER = os.environ['MQTT_SERVER']
 MQTT_PORT = int(os.environ.get('MQTT_PORT', '1883'))
 MSG_ON_FAIL = os.environ.get('MQTT_ON_FAIL', 'False').lower() == 'true'
 ASSISTANT_NAME = os.environ.get('ASSISTANT_NAME', 'Zhu Li')
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(ASSISTANT_NAME)
 
 def fetch_commands():
     """Parse the commands.json file
@@ -58,30 +54,90 @@ def get_mic():
         The microphone object.
     """
     audio_devices = PyAudio()                 
-    mic_stream = audio_devices.open(format=paInt16, channels=1, rate=16000, input=True, frames_per_buffer=8192)
-    mic_stream.start_stream()
+    mic_stream = audio_devices.open(format=paInt16, channels=1, rate=16000, input=True, frames_per_buffer=1024)
 
     return mic_stream
 
+def listen(mic_stream):
+    """
+    Take the microphone stream and tries to append chunks together to form a command.
 
-def process_audio(recognizer, mic_stream):
+    I am using a kind of weight system to determine when the voice command is over.
+    We start from 10, once sound is detected we start deducting weight.
+    The weight deduction is relational to the sound energy.
+    Once 0 the command is returned.
+
+    Args:
+        mic_stream: The microphone stream from get_mic().
+
+    Returns:
+        Audio bytes.
+    """
+    frames = deque()
+
+    energy_threshold = 300
+    energy_noise = 50
+
+    voice_activated = False
+    original_time_limit_weight = 10
+    time_limit_weight = original_time_limit_weight
+    while True:
+        audio_chunk = mic_stream.read(4096)
+        if len(audio_chunk) == 0:
+            # break of the loop if the stream stops.
+            break 
+
+        # Always keep a couple chunks of data before
+        # the voice is detected.
+        if not voice_activated:
+            frames.append(audio_chunk)
+            if len(frames) > 2:
+                frames.popleft()
+                     
+
+        energy = audioop.rms(audio_chunk, PyAudio().get_sample_size(paInt16))  # energy of the audio signal
+        logger.debug('sound energy: %i' % energy)
+        if voice_activated:
+            frames.append(audio_chunk)
+            if energy >= energy_threshold:
+                pass
+            else:
+                clamp_energy = min(energy_threshold, max(energy_noise, energy))
+                # Reduce the weight in relation with the audio signal
+                weight_to_deduct = 1 - (clamp_energy - energy_noise) / (energy_threshold - energy_noise)
+                # Speed up the loss  
+                weight_to_deduct = weight_to_deduct * (original_time_limit_weight / time_limit_weight)  * 1.2
+                logger.debug('weight_to_deduct: %f' % weight_to_deduct)
+                time_limit_weight -= weight_to_deduct
+        elif energy >= energy_threshold:
+            voice_activated = True
+            
+        logger.debug('weight: %f' % time_limit_weight)
+        if time_limit_weight <= 0:
+            break
+
+    return b"".join(frames)
+
+
+def process_audio(speech_plugin, mic_stream):
     """
     Input chunks of the microphone stream into the speech model and output text.
 
     Args:
-        recognizer: The KaldiRecognizer object from vosk.
+        speech_plugin (:obj:`speechPlugin`): A speech plugin Object.
         mic_stream: The microphone stream from get_mic().
 
     Returns:
         A string or None
 
     """
-    audio_chunk = mic_stream.read(4096)
-    if recognizer.AcceptWaveform(audio_chunk):
-        text = json.loads(recognizer.Result())
-        if text['text'] and text['text'] != 'huh':  # Filtering out 'huh' coming from noise.
-            logger.info('Audio Process: %s' % text['text'])
-            return (text['text'])
+    sentence = listen(mic_stream)
+    
+    speech_plugin.microphone_input(sentence)
+    text = speech_plugin.output()
+    if text:
+        logger.info('Audio Process: %s' % text)
+        return text
     
     return None
 
@@ -212,7 +268,7 @@ def main():
     """Main loop.
     """
     mic_stream = get_mic()
-    recognizer = KaldiRecognizer(Model(MODEL), 16000)
+    speech_plugin = Vosk()
 
     mqtt_client = mqtt.Client(client_id='', clean_session=True, userdata=None, protocol=mqtt.MQTTv311, transport='tcp')
     mqtt_client.connect(MQTT_SERVER, port=MQTT_PORT, keepalive=60)
@@ -220,7 +276,7 @@ def main():
 
     while True:
         try:
-            text = process_audio(recognizer, mic_stream)
+            text = process_audio(speech_plugin, mic_stream)
             if text:
                 pattern = find_pattern(text)
                 if pattern.action:
