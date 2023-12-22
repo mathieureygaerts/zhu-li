@@ -4,7 +4,12 @@ Store all the config shared by the code.
 import os
 import logging
 
+
+# Assistant
 ASSISTANT_NAME = os.environ.get('ASSISTANT_NAME', 'Zhu Li')
+
+# Microphone
+SAMPLE_RATE = int(os.environ.get('SAMPLE_RATE', '16000'))
 
 # Logging
 LOGGER = os.environ.get('LOGGER', 'info')

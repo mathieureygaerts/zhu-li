@@ -4,14 +4,14 @@ Plugin for the Vosk speech recognition toolkit.
 import json
 from vosk import Model, KaldiRecognizer
 from speech.base import SpeechPlugin
-from config import VOSK_MODEL
+from config import VOSK_MODEL, SAMPLE_RATE
 
 
 class Vosk(SpeechPlugin):
 
     def __init__(self):
         super().__init__()
-        self._recognizer = KaldiRecognizer(Model(VOSK_MODEL), 16000)
+        self._recognizer = KaldiRecognizer(Model(VOSK_MODEL), SAMPLE_RATE)
     
     def microphone_input(self, stream):
         self._recognizer.AcceptWaveform(stream)

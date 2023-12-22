@@ -272,12 +272,11 @@ def get_speech_plugin():
     if not os.path.isfile(module_path):
         raise IOError('%s does not exist' % module_path)
     
+    logger.info('Loading %s' % SPEECH_TOOLKIT)
     loader = SourceFileLoader(SPEECH_TOOLKIT, module_path)
     module_ = ModuleType(loader.name)
     loader.exec_module(module_)
-    print(module_)
     class_ = getattr(module_, SPEECH_TOOLKIT.title(), None)
-    print(class_)
 
     if not callable(class_):
         raise ValueError('Something is wrong in the plugin')

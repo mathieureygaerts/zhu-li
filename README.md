@@ -21,7 +21,7 @@ All the needed requirements are set in the requirements.txt file. I would sugges
 
 Before running the script, you need to set a few environment variables: `VOSK_MODEL_PATH`, `MQTT_SERVER`.
 
-This script use Vosk, a speech recognition toolkit. It supports multiple languages and have small models than can run on a raspberry pi.
+By default, this script uses Vosk, a speech recognition toolkit. It supports multiple languages and have small models than can run on a raspberry pi.
 Download the model you want from `https://alphacephei.com/vosk/`. 
 I tested this with the `vosk-model-small-en-us-0.15` model.
 
@@ -31,11 +31,14 @@ If you placed the unzipped folder beside this script, the environment variable w
 #### Variable list
 |Name|Default|Description|
 |---|---|---|
-|`VOSK_MODEL_PATH`||Path to the Vosk Model|
 |`MQTT_SERVER`||Ip address of the MQTT broker|
 |`MQTT_PORT`|`1883`|Port|
 |`ASSISTANT_NAME`|`Zhu Li`|Name of the Assistant|
 |`MSG_ON_FAIL`|`False`|Send a MQTT message with the `fail` topic (e.g: `zhuli/fail`) on failing match.|
+|`SPEECH_TOOLKIT`|`vosk`|You can change the speech toolkit used by setting this variable.|
+|`SAMPLE_RATE`|`16000`|Use to change the default sample rate.|
+|`VOSK_MODEL_PATH`||Path to the Vosk Model|
+|`LOGGER`|`info`|Can also be set to `debug`|
 
 
 ## Set the voice commands
@@ -93,3 +96,15 @@ If you also set a payload in the `commands.yml` for that action, it will be adde
 Once all the above requirements are fulfilled, simply run the main.py script.
 
 You will need to set your home assistant to listen for the mqtt messages and trigger your devices accordingly.
+
+
+## Add an alternative speech recognition toolkit.
+
+Alternative toolkits can by added by creating a plugin file within the speech folder.
+When the script starts, it fetches the `SPEECH_TOOLKIT` environment variable and look for a matching python file.
+`SPEECH_TOOLKIT=sphinx` will look for `speech/sphinx.py`.
+
+In your plugin, create a class that inherits from SpeechPlugin.
+The name of the class needs to match the toolkit's name with the first letter capitalized.
+
+Looks at the files in the speech folder to see how to write the needed methods.
