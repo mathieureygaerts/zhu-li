@@ -4,20 +4,16 @@ It publishes MQTT messages when commands are triggered.
 """
 import sys
 import os
+from importlib.machinery import SourceFileLoader
+from types import ModuleType
 from time import sleep
-from lib.logger import logger
 import json
 from collections import namedtuple, deque
 import audioop
 from pyaudio import PyAudio, paInt16
 from jellyfish import jaro_winkler_similarity
 import paho.mqtt.client as mqtt
-from speech.vosk import Vosk
-
-MQTT_SERVER = os.environ['MQTT_SERVER']
-MQTT_PORT = int(os.environ.get('MQTT_PORT', '1883'))
-MSG_ON_FAIL = os.environ.get('MQTT_ON_FAIL', 'False').lower() == 'true'
-ASSISTANT_NAME = os.environ.get('ASSISTANT_NAME', 'Zhu Li')
+from config import logger, MQTT_SERVER, MQTT_PORT, MSG_ON_FAIL, ASSISTANT_NAME, SPEECH_TOOLKIT
 
 def fetch_commands():
     """Parse the commands.json file
@@ -75,6 +71,7 @@ def listen(mic_stream):
     """
     frames = deque()
 
+    # TODO: Update those two values on the fly.
     energy_threshold = 300
     energy_noise = 50
 
@@ -116,7 +113,7 @@ def listen(mic_stream):
         if time_limit_weight <= 0:
             break
 
-    return b"".join(frames)
+    return b''.join(frames)
 
 
 def process_audio(speech_plugin, mic_stream):
@@ -263,12 +260,36 @@ def trigger_fail(mqtt_client, pattern):
 
     mqtt_client.publish(mqtt_failed_topic, payload=json.dumps(payload), qos=1)
 
+def get_speech_plugin():
+    """
+    Load the plugin set by the `SPEECH_TOOLKIT` environment variable.
+
+    Returns
+        (:obj:`SpeechPlugin`): Return the selected Speech plugin.
+    
+    """
+    module_path = os.path.join('./speech', SPEECH_TOOLKIT + '.py')
+    if not os.path.isfile(module_path):
+        raise IOError('%s does not exist' % module_path)
+    
+    loader = SourceFileLoader(SPEECH_TOOLKIT, module_path)
+    module_ = ModuleType(loader.name)
+    loader.exec_module(module_)
+    print(module_)
+    class_ = getattr(module_, SPEECH_TOOLKIT.title(), None)
+    print(class_)
+
+    if not callable(class_):
+        raise ValueError('Something is wrong in the plugin')
+
+    return class_()
+
 
 def main():
     """Main loop.
     """
     mic_stream = get_mic()
-    speech_plugin = Vosk()
+    speech_plugin = get_speech_plugin()
 
     mqtt_client = mqtt.Client(client_id='', clean_session=True, userdata=None, protocol=mqtt.MQTTv311, transport='tcp')
     mqtt_client.connect(MQTT_SERVER, port=MQTT_PORT, keepalive=60)
